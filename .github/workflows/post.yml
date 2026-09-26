@@ -1,0 +1,39 @@
+name: Binance Square Bot
+
+on:
+  schedule:
+    - cron: "*/30 * * * *"   # every 30 minutes
+  workflow_dispatch: {}       # lets you also trigger it manually from GitHub's website
+
+permissions:
+  contents: write            # needed so the bot can save its memory/log files back to the repo
+
+jobs:
+  post:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install requests python-dotenv
+
+      - name: Run the bot once
+        env:
+          GEMINI_KEY_1: ${{ secrets.GEMINI_KEY_1 }}
+          GEMINI_KEY_2: ${{ secrets.GEMINI_KEY_2 }}
+          GEMINI_KEY_3: ${{ secrets.GEMINI_KEY_3 }}
+          GEMINI_KEY_4: ${{ secrets.GEMINI_KEY_4 }}
+          BINANCE_SQUARE_KEY: ${{ secrets.BINANCE_SQUARE_KEY }}
+        run: python3 binance_bot.py --once
+
+      - name: Save memory and log back to the repo
+        run: |
+          git config user.name "binance-bot"
+          git config user.email "binance-bot@users.noreply.github.com"
+          git add posting_memory.json post_log.csv || true
+          git commit -m "Update posting memory/log" || echo "Nothing to commit"
+          git push
