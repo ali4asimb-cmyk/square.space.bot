@@ -70,7 +70,7 @@ def log_result(row):
 # ============================================================
 
 def fetch_candidates():
-    resp = requests.get("https://api.binance.com/api/v3/ticker/24hr", timeout=15)
+    resp = requests.get("https://data-api.binance.vision/api/v3/ticker/24hr", timeout=15)
     resp.raise_for_status()
     tickers = resp.json()
 
