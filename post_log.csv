@@ -34,3 +34,4 @@ date,time,symbol,direction,status,error
 2026-09-26,23:07,XPL,SHORT,SUCCESS,
 2026-09-26,23:36,PEPE,SHORT,FAILED,Daily post limit exceeded for OpenAPI
 2026-09-27,00:11,AMP,LONG,SUCCESS,
+2026-09-27,00:44,QNT,LONG,SUCCESS,
