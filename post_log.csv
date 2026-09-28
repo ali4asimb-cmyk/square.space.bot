@@ -74,3 +74,4 @@ date,time,symbol,direction,status,error
 2026-09-27,22:39,ONE,LONG,SUCCESS,
 2026-09-27,23:37,SEI,LONG,SUCCESS,
 2026-09-28,00:13,QNT,,GEMINI_FAILED,All Gemini keys failed: HTTPSConnectionPool(host='generativelanguage.googleapis.com', port=443): Read timed out. (read timeout=30)
+2026-09-28,00:45,QNT,SHORT,SUCCESS,
