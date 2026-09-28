@@ -112,3 +112,4 @@ date,time,symbol,direction,status,error
 2026-09-28,18:10,SUI,,GEMINI_FAILED,All Gemini keys failed: 503 Server Error: Service Unavailable for url: https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=AQ.Ab8RN6LlqqWc9S3bh7XmIBj3qJunjWQZ1
 2026-09-28,18:43,NEAR,SHORT,SUCCESS,
 2026-09-28,19:08,ENA,SHORT,SUCCESS,
+2026-09-28,19:40,SUI,SHORT,SUCCESS,
