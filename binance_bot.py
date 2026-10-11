@@ -24,6 +24,7 @@ BINANCE_SQUARE_KEY = os.getenv("BINANCE_SQUARE_KEY")
 
 MAX_POSTS_PER_DAY = 40
 POST_INTERVAL_MINUTES = 30
+MIN_MINUTES_BETWEEN_POSTS = 28  # skip a run if the last post was more recent than this
 
 MEMORY_FILE = "posting_memory.json"
 LOG_FILE = "post_log.csv"
@@ -47,7 +48,12 @@ def load_memory():
 
     # Reset automatically when the day changes
     if mem.get("date") != str(date.today()):
-        mem = {"date": str(date.today()), "posted_symbols": [], "count": 0}
+        mem = {
+            "date": str(date.today()),
+            "posted_symbols": [],
+            "count": 0,
+            "last_post_ts": mem.get("last_post_ts", 0),
+        }
 
     return mem
 
@@ -70,7 +76,29 @@ def log_result(row):
 # ============================================================
 
 def fetch_candidates():
-    resp = requests.get("https://data-api.binance.vision/api/v3/ticker/24hr", timeout=15)
+    hosts = [
+        "https://data-api.binance.vision",
+        "https://api.binance.com",
+    ]
+    headers = {"User-Agent": "Mozilla/5.0"}
+
+    resp = None
+    last_error = None
+    for host in hosts:
+        for attempt in range(1, 3):
+            try:
+                resp = requests.get(f"{host}/api/v3/ticker/24hr", headers=headers, timeout=15)
+                break
+            except requests.exceptions.ConnectionError as e:
+                last_error = e
+                print(f"⚠️ Connection problem with {host} (try {attempt}/2): {e}")
+                time.sleep(3)
+        if resp is not None:
+            break
+
+    if resp is None:
+        raise last_error
+
     resp.raise_for_status()
     tickers = resp.json()
 
@@ -174,7 +202,7 @@ def ask_gemini(coin):
 
 
 # ============================================================
-# STEP 3 — FORMAT THE POST (randomly picks one of your 4 styles)
+# STEP 3 — FORMAT THE POST
 # ============================================================
 
 def calculate_risk_reward(entry, stop_loss, tp1):
@@ -253,81 +281,6 @@ def format_post(coin, signal):
 # STEP 4 — PUBLISH TO BINANCE SQUARE
 # ============================================================
 
-import uuid as uuid_lib
-
-
-def check_futures_support(base_symbol):
-    try:
-        resp = requests.get(
-            "https://fapi.binance.com/fapi/v1/ticker/price",
-            params={"symbol": f"{base_symbol}USDT"},
-            timeout=10,
-        )
-        return resp.status_code == 200 and "price" in (resp.json() or {})
-    except Exception:
-        return False
-
-
-def build_publish_body(coin, signal, post_text):
-    base = coin["base"]
-    pair = f"{base}USDT"
-    supported = check_futures_support(base)
-
-    # tendency: 1 = bullish (confirmed from a captured real request).
-    # 2 = bearish is a best guess, not yet confirmed — verify by capturing
-    # a real bearish post the same way, then update this if it's wrong.
-    tendency = 2 if ("SHORT" in signal["direction"].upper()) else 1
-
-    if not supported:
-        # No chart/token support for this coin -> plain text post, same as before
-        return {"bodyTextOnly": post_text, "tendency": tendency}
-
-    coin_info_block_id = str(uuid_lib.uuid4())
-    paragraph_block_id = str(uuid_lib.uuid4())
-    coin_pair_key = str(uuid_lib.uuid4())
-
-    rich_body = {
-        "layout": {"root": ["ViewInstance0"], "ViewInstance0": [paragraph_block_id, coin_info_block_id]},
-        "hash": {
-            "ViewInstance0": {"id": "Fragment"},
-            paragraph_block_id: {
-                "id": "RichTextParagraph",
-                "config": {
-                    "content": [
-                        {"id": "RichTextCoinPair", "key": coin_pair_key, "config": {"content": f"${base} "}}
-                    ]
-                },
-            },
-            coin_info_block_id: {
-                "id": "RichTextCoinInfoCard",
-                "config": {
-                    "blockId": coin_info_block_id,
-                    "coin": base,
-                    "type": "spot",
-                    "bridge": "USDT",
-                    "source": "coinpair",
-                    "chainId": None,
-                    "contractAddress": None,
-                },
-            },
-        },
-    }
-
-    widget = {"coin": base, "type": "spot", "bridge": "USDT", "source": "coinpair", "chainId": None, "contractAddress": None}
-
-    return {
-        "contentType": 1,
-        "bodyTextOnly": f"${base} \n" + "{spot}(" + pair + ")\n" + post_text,
-        "body": json.dumps(rich_body),
-        "coinPairList": [f"${base} "],
-        "hasCoinPair": True,
-        "tradeWidgets": [widget],
-        "tradeTag": None,
-        "tendency": tendency,
-        "web3TokenInfo": None,
-    }
-
-
 def publish_post(coin, signal, post_text):
     url = "https://www.binance.com/bapi/composite/v1/public/pgc/openApi/content/add"
     headers = {
@@ -335,9 +288,26 @@ def publish_post(coin, signal, post_text):
         "Content-Type": "application/json",
         "clienttype": "binanceSkill",
     }
-    payload = build_publish_body(coin, signal, post_text)
 
-    resp = requests.post(url, headers=headers, json=payload, timeout=20)
+    # Officially documented behavior: Binance's backend auto-parses $SYMBOL
+    # and #topic mentions found in plain bodyTextOnly — no custom JSON needed.
+    payload = {"bodyTextOnly": post_text}
+
+    # Retry a few times if the connection is cut (e.g. "Connection reset by peer")
+    resp = None
+    last_conn_error = None
+    for attempt in range(1, 4):
+        try:
+            resp = requests.post(url, headers=headers, json=payload, timeout=20)
+            break
+        except requests.exceptions.ConnectionError as e:
+            last_conn_error = e
+            print(f"⚠️ Connection problem posting (try {attempt}/3): {e}")
+            time.sleep(5)
+
+    if resp is None:
+        return False, "", f"Connection failed after 3 tries: {last_conn_error}"
+
     data = resp.json() if resp.content else {}
 
     success = data.get("success") is True and str(data.get("code")) == "000000"
@@ -359,7 +329,17 @@ def run_once():
         print(f"⏸ Daily cap reached ({MAX_POSTS_PER_DAY}). Skipping this run.")
         return
 
-    candidates = fetch_candidates()
+    minutes_since_last = (time.time() - mem.get("last_post_ts", 0)) / 60
+    if minutes_since_last < MIN_MINUTES_BETWEEN_POSTS:
+        print(f"⏸ Last post was {minutes_since_last:.0f} min ago. Waiting for the 30-minute gap.")
+        return
+
+    try:
+        candidates = fetch_candidates()
+    except Exception as e:
+        print("⚠️ Market data step failed:", e)
+        return
+
     coin = pick_eligible_coin(candidates, mem)
 
     if not coin:
@@ -379,6 +359,7 @@ def run_once():
     if success:
         mem["posted_symbols"].append(coin["base"])
         mem["count"] += 1
+        mem["last_post_ts"] = time.time()
         save_memory(mem)
         print(f"✅ Posted {coin['base']} ({signal['direction']}) — post id {post_id}")
         log_result([date.today(), datetime.now().strftime("%H:%M"), coin["base"], signal["direction"], "SUCCESS", ""])
