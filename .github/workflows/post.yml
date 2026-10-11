@@ -2,7 +2,7 @@ name: Binance Square Bot
 
 on:
   schedule:
-    - cron: "*/30 * * * *"   # every 30 minutes
+       - cron: "*/10 * * * *"   # every 30 minutes
   workflow_dispatch: {}       # lets you also trigger it manually from GitHub's website
 
 permissions:
