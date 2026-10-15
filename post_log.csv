@@ -534,3 +534,4 @@ date,time,symbol,direction,status,error
 2026-10-15,05:13,KORUB,SHORT,SUCCESS,
 2026-10-15,10:05,SOXLB,SHORT,SUCCESS,
 2026-10-15,14:59,NIL,LONG,SUCCESS,
+2026-10-15,19:04,ZK,,GEMINI_FAILED,All Gemini keys failed: 503 Server Error: Service Unavailable for url: https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=AQ.Ab8RN6LlqqWc9S3bh7XmIBj3qJunjWQZ1
