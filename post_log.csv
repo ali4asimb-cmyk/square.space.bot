@@ -725,3 +725,4 @@ date,time,symbol,direction,status,error
 2026-11-27,11:28,PORTAL,LONG,SUCCESS,
 2026-11-27,20:15,HAEDAL,LONG,SUCCESS,
 2026-11-28,02:48,PORTAL,LONG,SUCCESS,
+2026-11-28,11:00,WLFI,,GEMINI_FAILED,All Gemini keys failed: 503 Server Error: Service Unavailable for url: https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=AQ.Ab8RN6LlqqWc9S3bh7XmIBj3qJunjWQZ1
